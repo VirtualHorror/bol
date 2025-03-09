@@ -10,16 +10,39 @@ export default function Dashboard() {
   const [anomalies, setAnomalies] = useState<any>(null);
   const [timeRange, setTimeRange] = useState('7d');
   const [error, setError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Check file size (100MB limit)
+    if (file.size > 100 * 1024 * 1024) {
+      setError('File size exceeds 100MB limit. Please upload a smaller file.');
+      return;
+    }
+
     try {
       setIsProcessing(true);
       setError(null);
+      setUploadProgress(0);
       
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 90) {
+            clearInterval(progressInterval);
+            return 90;
+          }
+          return prev + 10;
+        });
+      }, 200);
+
       const data = await processGoogleFitData(file);
+      
+      clearInterval(progressInterval);
+      setUploadProgress(100);
+
       if (!data.heartRate.length && !data.steps.length && !data.distance.length) {
         throw new Error('No valid data found in the uploaded file. Please ensure this is a Google Takeout export containing Fit data.');
       }
@@ -35,6 +58,7 @@ export default function Dashboard() {
       setAnomalies(null);
     } finally {
       setIsProcessing(false);
+      setUploadProgress(0);
     }
   };
 
@@ -75,7 +99,7 @@ export default function Dashboard() {
                 <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                 <p className="text-lg mb-4">Drop your Google Takeout ZIP file here</p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  or click the button below to select a file
+                  Please ensure you are uploading a Google Takeout export containing Fit data (max 100MB)
                 </p>
                 <input
                   type="file"
@@ -93,6 +117,20 @@ export default function Dashboard() {
                 >
                   {isProcessing ? 'Processing...' : 'Select File'}
                 </Button>
+
+                {uploadProgress > 0 && (
+                  <div className="mt-4">
+                    <div className="w-full bg-secondary rounded-full h-2">
+                      <div
+                        className="bg-primary h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {uploadProgress < 100 ? 'Processing...' : 'Complete!'}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
