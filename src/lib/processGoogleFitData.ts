@@ -43,6 +43,20 @@ export async function processGoogleFitData(file: File): Promise<ProcessedData> {
   const extractedFiles = new Map<string, string>();
   const validPaths = new Set<string>();
 
+  // Check if we have the root Takeout/Fit directory
+  const hasFitFolder = Object.keys(zip.files).some(path => 
+    path.replace(/\\/g, '/').toLowerCase().startsWith('takeout/fit/')
+  );
+
+  if (!hasFitFolder) {
+    throw new Error(
+      'Invalid Google Takeout structure. Missing "Fit" directory.\n' +
+      'Please ensure you:\n' +
+      '1. Selected ONLY "Fit" data in Google Takeout\n' +
+      '2. Downloaded the complete export from Google'
+    );
+  }
+
   // Extract and validate the structure
   for (const [filename, zipEntry] of Object.entries(zip.files)) {
     if (zipEntry.dir) continue;
@@ -51,19 +65,19 @@ export async function processGoogleFitData(file: File): Promise<ProcessedData> {
       const normalizedPath = filename.replace(/\\/g, '/');
       
       // Check if this is a Fit data file
-      if (normalizedPath.includes('Takeout/Fit/')) {
+      if (normalizedPath.toLowerCase().includes('takeout/fit/')) {
         // Skip non-JSON files and unwanted directories
         if (!normalizedPath.endsWith('.json')) continue;
-        if (normalizedPath.includes('Daily Activity Metrics')) continue;
-        if (normalizedPath.includes('All Sessions')) continue;
-        if (normalizedPath.includes('Activities')) continue;
+        if (normalizedPath.toLowerCase().includes('daily activity metrics')) continue;
+        if (normalizedPath.toLowerCase().includes('all sessions')) continue;
+        if (normalizedPath.toLowerCase().includes('activities')) continue;
 
-        // Only process files from All Data directory
-        if (normalizedPath.includes('Takeout/Fit/All Data')) {
+        // CORRECTED LINE: Match case-sensitive "All data" folder
+        if (normalizedPath.includes('Takeout/Fit/All data')) {
           const content = await zipEntry.async('string');
           extractedFiles.set(normalizedPath, content);
           validPaths.add(normalizedPath);
-          console.log('Extracted file:', normalizedPath);
+          console.log('Processing file:', normalizedPath);
         }
       }
     } catch (error) {
@@ -72,7 +86,14 @@ export async function processGoogleFitData(file: File): Promise<ProcessedData> {
   }
 
   if (validPaths.size === 0) {
-    throw new Error('No valid Google Fit data files found. Please ensure you have exported Google Fit data from Google Takeout and selected the Fit data option.');
+    throw new Error(
+      'No valid Google Fit data found!\n' +
+      'Please ensure:\n' +
+      '1. You selected "Fit" data in Google Takeout\n' +
+      '2. The export contains activity data\n' +
+      '3. You waited for Google to prepare the export (may take hours)\n' +
+      '4. You downloaded the COMPLETE export from Google'
+    );
   }
 
   // Process the extracted files
@@ -161,17 +182,12 @@ export async function processGoogleFitData(file: File): Promise<ProcessedData> {
   }
 
   if (!foundFitData) {
-    throw new Error('No valid Google Fit data found in the files. Please ensure your Google Takeout export contains fitness data.');
+    throw new Error(
+      'No fitness data found!\n' +
+      'Found files but no valid heart rate, steps, distance or sleep data.\n' +
+      'Ensure the smartwatch was properly synced with Google Fit.'
+    );
   }
-
-  // Log summary of processed data
-  console.log('Data processing summary:', {
-    heartRatePoints: processedData.heartRate.length,
-    stepPoints: processedData.steps.length,
-    distancePoints: processedData.distance.length,
-    sleepPoints: processedData.sleep.length,
-    totalFiles: processedData.fileHashes.length
-  });
 
   // Sort all data by timestamp
   processedData.heartRate.sort((a, b) => a.timestamp - b.timestamp);
