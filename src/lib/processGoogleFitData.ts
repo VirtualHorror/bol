@@ -1,8 +1,5 @@
 import JSZip from 'jszip';
 import CryptoJS from 'crypto-js';
-import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
-import path from 'path';
 
 interface DataPoint {
   startTimeNanos: string;
@@ -42,11 +39,6 @@ export async function processGoogleFitData(file: File): Promise<ProcessedData> {
     throw new Error('Failed to read the ZIP file. Please ensure the file is not corrupted.');
   }
 
-  // Create a UID folder for each upload to avoid clutter
-  const uid = uuidv4();
-  const uidFolderPath = path.join(__dirname, '..', '..', 'uploads', uid);
-  fs.mkdirSync(uidFolderPath, { recursive: true });
-
   // First, extract all files to memory
   const extractedFiles = new Map<string, string>();
   const validPaths = new Set<string>();
@@ -72,10 +64,6 @@ export async function processGoogleFitData(file: File): Promise<ProcessedData> {
           extractedFiles.set(normalizedPath, content);
           validPaths.add(normalizedPath);
           console.log('Extracted file:', normalizedPath);
-
-          // Store extracted files in the UID folder within the project's main folder
-          const filePath = path.join(uidFolderPath, path.basename(normalizedPath));
-          fs.writeFileSync(filePath, content);
         }
       }
     } catch (error) {
@@ -175,16 +163,6 @@ export async function processGoogleFitData(file: File): Promise<ProcessedData> {
   if (!foundFitData) {
     throw new Error('No valid Google Fit data found in the files. Please ensure your Google Takeout export contains fitness data.');
   }
-
-  // Delete unnecessary data from the 'Fit' directory after extraction
-  const fitDirPath = path.join(uidFolderPath, 'Takeout', 'Fit');
-  const unnecessaryDirs = ['Daily Activity Metrics', 'All Sessions', 'Activities'];
-  unnecessaryDirs.forEach(dir => {
-    const dirPath = path.join(fitDirPath, dir);
-    if (fs.existsSync(dirPath)) {
-      fs.rmSync(dirPath, { recursive: true, force: true });
-    }
-  });
 
   // Log summary of processed data
   console.log('Data processing summary:', {
